@@ -17,6 +17,8 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Github https://github.com/ubuntu-phonedations/nuntium/tree/master/mms
  */
 
 package mms
@@ -30,16 +32,19 @@ import (
 	"reflect"
 )
 
-type MMSEncoder struct {
+// Encoder struct
+type Encoder struct {
 	w   io.Writer
 	log string
 }
 
-func NewEncoder(w io.Writer) *MMSEncoder {
-	return &MMSEncoder{w: w}
+// NewEncoder create a new instance of Encoder
+func NewEncoder(w io.Writer) *Encoder {
+	return &Encoder{w: w}
 }
 
-func (enc *MMSEncoder) Encode(pdu MMSWriter) error {
+// Encode HeaderFrom a writer
+func (enc *Encoder) Encode(pdu Writer) error {
 	rPdu := reflect.ValueOf(pdu).Elem()
 
 	//The order of the following fields doesn't matter much
@@ -65,30 +70,30 @@ func (enc *MMSEncoder) Encode(pdu MMSWriter) error {
 
 		switch fieldName {
 		case "Type":
-			err = enc.writeByteParam(X_MMS_MESSAGE_TYPE, byte(f.Uint()))
+			err = enc.writeByteParam(HeaderXMmsMessageType, byte(f.Uint()))
 		case "Version":
-			err = enc.writeByteParam(X_MMS_MMS_VERSION, byte(f.Uint()))
-		case "TransactionId":
-			err = enc.writeStringParam(X_MMS_TRANSACTION_ID, f.String())
+			err = enc.writeByteParam(HeaderXMmsMmsVersion, byte(f.Uint()))
+		case "TransactionID":
+			err = enc.writeStringParam(HeaderXMmsTransactionID, f.String())
 		case "Status":
-			err = enc.writeByteParam(X_MMS_STATUS, byte(f.Uint()))
+			err = enc.writeByteParam(HeaderXMmsStatus, byte(f.Uint()))
 		case "From":
 			err = enc.writeFrom()
 		case "Name":
-			err = enc.writeStringParam(WSP_PARAMETER_TYPE_NAME_DEFUNCT, f.String())
+			err = enc.writeStringParam(wspParameterTypeNameDefunct, f.String())
 		case "Start":
-			err = enc.writeStringParam(WSP_PARAMETER_TYPE_START_DEFUNCT, f.String())
+			err = enc.writeStringParam(wspParameterTypeStartDefunct, f.String())
 		case "To":
 			for i := 0; i < f.Len(); i++ {
-				err = enc.writeStringParam(TO, f.Index(i).String())
+				err = enc.writeStringParam(HeaderTo, f.Index(i).String())
 				if err != nil {
 					break
 				}
 			}
 		case "ContentType":
-			// if there is a ContentType there has to be content
+			// if there is a ContentType there has HeaderTo be content
 			if mSendReq, ok := pdu.(*MSendReq); ok {
-				if err := enc.setParam(CONTENT_TYPE); err != nil {
+				if err := enc.setParam(HeaderContentType); err != nil {
 					return err
 				}
 				if err = enc.writeContentType(mSendReq.ContentType, mSendReq.ContentTypeStart, mSendReq.ContentTypeType, ""); err != nil {
@@ -112,22 +117,22 @@ func (enc *MMSEncoder) Encode(pdu MMSWriter) error {
 			//TODO
 			err = enc.writeCharset(f.String())
 		case "ContentLocation":
-			err = enc.writeStringParam(MMS_PART_CONTENT_LOCATION, f.String())
-		case "ContentId":
-			err = enc.writeQuotedStringParam(MMS_PART_CONTENT_ID, f.String())
+			err = enc.writeStringParam(mmsPartContentLocation, f.String())
+		case "ContentID":
+			err = enc.writeQuotedStringParam(mmsPartContentID, f.String())
 		case "Date":
-			date := f.Uint()
-			if date > 0 {
-				err = enc.writeLongIntegerParam(DATE, date)
+			dateTime := f.Uint()
+			if dateTime > 0 {
+				err = enc.writeLongIntegerParam(HeaderDate, dateTime)
 			}
 		case "Class":
-			err = enc.writeByteParam(X_MMS_MESSAGE_CLASS, byte(f.Uint()))
+			err = enc.writeByteParam(HeaderXMmsMessageClass, byte(f.Uint()))
 		case "ReportAllowed":
-			err = enc.writeByteParam(X_MMS_REPORT_ALLOWED, byte(f.Uint()))
+			err = enc.writeByteParam(HeaderXMmsReportAllowed, byte(f.Uint()))
 		case "DeliveryReport":
-			err = enc.writeByteParam(X_MMS_DELIVERY_REPORT, byte(f.Uint()))
+			err = enc.writeByteParam(HeaderXMmsDeliveryReport, byte(f.Uint()))
 		case "ReadReport":
-			err = enc.writeByteParam(X_MMS_READ_REPORT, byte(f.Uint()))
+			err = enc.writeByteParam(HeaderXMmsReadReport, byte(f.Uint()))
 		case "Expiry":
 			expiry := f.Uint()
 			if expiry > 0 {
@@ -137,7 +142,7 @@ func (enc *MMSEncoder) Encode(pdu MMSWriter) error {
 			if encodeTag == "optional" {
 				log.Printf("Unhandled optional field %s", fieldName)
 			} else {
-				panic(fmt.Sprintf("missing encoding for mandatory field %s", fieldName))
+				return fmt.Errorf("missing encoding for mandatory field %s", fieldName)
 			}
 		}
 		if err != nil {
@@ -147,10 +152,12 @@ func (enc *MMSEncoder) Encode(pdu MMSWriter) error {
 	return nil
 }
 
-func (enc *MMSEncoder) setParam(param byte) error {
+// setParam func
+func (enc *Encoder) setParam(param byte) error {
 	return enc.writeByte(param | 0x80)
 }
 
+// encodeAttachment encode an attachment struct
 func encodeAttachment(attachment *Attachment) ([]byte, error) {
 	var outBytes bytes.Buffer
 	enc := NewEncoder(&outBytes)
@@ -160,7 +167,8 @@ func encodeAttachment(attachment *Attachment) ([]byte, error) {
 	return outBytes.Bytes(), nil
 }
 
-func (enc *MMSEncoder) writeAttachments(attachments []*Attachment) error {
+// writeAttachments write an attachment
+func (enc *Encoder) writeAttachments(attachments []*Attachment) error {
 	// Write the number of parts
 	if err := enc.writeUintVar(uint64(len(attachments))); err != nil {
 		return err
@@ -168,11 +176,11 @@ func (enc *MMSEncoder) writeAttachments(attachments []*Attachment) error {
 
 	for i := range attachments {
 		var attachmentHeader []byte
-		if b, err := encodeAttachment(attachments[i]); err != nil {
+		b, err := encodeAttachment(attachments[i])
+		if err != nil {
 			return err
-		} else {
-			attachmentHeader = b
 		}
+		attachmentHeader = b
 
 		// headers length
 		headerLength := uint64(len(attachmentHeader))
@@ -194,58 +202,61 @@ func (enc *MMSEncoder) writeAttachments(attachments []*Attachment) error {
 	return nil
 }
 
-func (enc *MMSEncoder) writeCharset(charset string) error {
+// writeCharset func
+func (enc *Encoder) writeCharset(charset string) error {
 	if charset == "" {
 		return nil
 	}
-	charsetCode := uint64(ANY_CHARSET)
+	charsetCode := uint64(anyCharset)
 	for k, v := range CHARSETS {
 		if v == charset {
 			charsetCode = k
 		}
 	}
-	return enc.writeIntegerParam(WSP_PARAMETER_TYPE_CHARSET, charsetCode)
+	return enc.writeIntegerParam(wspParameterTypeCharset, charsetCode)
 }
 
-func (enc *MMSEncoder) writeLength(length uint64) error {
-	if length <= SHORT_LENGTH_MAX {
+// writeLength func
+func (enc *Encoder) writeLength(length uint64) error {
+	if length <= shortLengthMax {
 		return enc.writeByte(byte(length))
-	} else {
-		if err := enc.writeByte(LENGTH_QUOTE); err != nil {
-			return err
-		}
-		return enc.writeUintVar(length)
 	}
+	if err := enc.writeByte(lengthQuote); err != nil {
+		return err
+	}
+	return enc.writeUintVar(length)
 }
 
+// encodeContentType func
 func encodeContentType(media string) (uint64, error) {
 	var mt int
-	for mt = range CONTENT_TYPES {
-		if CONTENT_TYPES[mt] == media {
+	for mt = range contentTypes {
+		if contentTypes[mt] == media {
 			return uint64(mt), nil
 		}
 	}
 	return 0, errors.New("cannot binary encode media")
 }
 
-func (enc *MMSEncoder) writeContentType(media, start, ctype, name string) error {
+// writeContentType func
+func (enc *Encoder) writeContentType(media, start, ctype, name string) error {
 	if start == "" && ctype == "" && name == "" {
 		return enc.writeMediaType(media)
 	}
 
 	var contentType []byte
 	if start != "" {
-		contentType = append(contentType, WSP_PARAMETER_TYPE_START_DEFUNCT|SHORT_FILTER)
+		contentType = append(contentType, wspParameterTypeStartDefunct|shortFilter)
 		contentType = append(contentType, []byte(start)...)
 		contentType = append(contentType, 0)
 	}
 	if ctype != "" {
-		contentType = append(contentType, WSP_PARAMETER_TYPE_CONTENT_TYPE|SHORT_FILTER)
+		contentType = append(contentType, wspParameterTypeContentType|shortFilter)
 		contentType = append(contentType, []byte(ctype)...)
 		contentType = append(contentType, 0)
 	}
 	if name != "" {
-		contentType = append(contentType, WSP_PARAMETER_TYPE_NAME_DEFUNCT|SHORT_FILTER)
+		contentType = append(contentType, wspParameterTypeNameDefunct|shortFilter)
 		contentType = append(contentType, []byte(name)...)
 		contentType = append(contentType, 0)
 	}
@@ -271,7 +282,8 @@ func (enc *MMSEncoder) writeContentType(media, start, ctype, name string) error 
 	return enc.writeBytes(contentType, len(contentType))
 }
 
-func (enc *MMSEncoder) writeMediaType(media string) error {
+// writeMediaType func
+func (enc *Encoder) writeMediaType(media string) error {
 	if mt, err := encodeContentType(media); err == nil {
 		return enc.writeInteger(mt)
 	}
@@ -283,8 +295,9 @@ func (enc *MMSEncoder) writeMediaType(media string) error {
 	return enc.writeString(media)
 }
 
-func (enc *MMSEncoder) writeRelativeExpiry(expiry uint64) error {
-	if err := enc.setParam(X_MMS_EXPIRY); err != nil {
+// writeRelativeExpiry func
+func (enc *Encoder) writeRelativeExpiry(expiry uint64) error {
+	if err := enc.setParam(HeaderXMmsExpiry); err != nil {
 		return err
 	}
 	encodedLong := encodeLong(expiry)
@@ -299,34 +312,38 @@ func (enc *MMSEncoder) writeRelativeExpiry(expiry uint64) error {
 	return enc.writeBytes(b, len(b))
 }
 
-func (enc *MMSEncoder) writeLongIntegerParam(param byte, i uint64) error {
+// writeLongIntegerParam func
+func (enc *Encoder) writeLongIntegerParam(param byte, i uint64) error {
 	if err := enc.setParam(param); err != nil {
 		return err
 	}
 	return enc.writeLongInteger(i)
 }
 
-func (enc *MMSEncoder) writeIntegerParam(param byte, i uint64) error {
+// writeIntegerParam func
+func (enc *Encoder) writeIntegerParam(param byte, i uint64) error {
 	if err := enc.setParam(param); err != nil {
 		return err
 	}
 	return enc.writeInteger(i)
 }
 
-func (enc *MMSEncoder) writeQuotedStringParam(param byte, s string) error {
+// writeQuotedStringParam func
+func (enc *Encoder) writeQuotedStringParam(param byte, s string) error {
 	if s == "" {
 		enc.log = enc.log + "Skipping empty string\n"
 	}
 	if err := enc.setParam(param); err != nil {
 		return err
 	}
-	if err := enc.writeByte(STRING_QUOTE); err != nil {
+	if err := enc.writeByte(stringQuote); err != nil {
 		return err
 	}
 	return enc.writeString(s)
 }
 
-func (enc *MMSEncoder) writeStringParam(param byte, s string) error {
+// writeStringParam func
+func (enc *Encoder) writeStringParam(param byte, s string) error {
 	if s == "" {
 		enc.log = enc.log + "Skipping empty string\n"
 		return nil
@@ -337,54 +354,59 @@ func (enc *MMSEncoder) writeStringParam(param byte, s string) error {
 	return enc.writeString(s)
 }
 
-func (enc *MMSEncoder) writeByteParam(param byte, b byte) error {
+// writeByteParam func
+func (enc *Encoder) writeByteParam(param byte, b byte) error {
 	if err := enc.setParam(param); err != nil {
 		return err
 	}
 	return enc.writeByte(b)
 }
 
-func (enc *MMSEncoder) writeFrom() error {
-	if err := enc.setParam(FROM); err != nil {
+// writeFrom func
+func (enc *Encoder) writeFrom() error {
+	if err := enc.setParam(HeaderFrom); err != nil {
 		return err
 	}
 	if err := enc.writeByte(1); err != nil {
 		return err
 	}
-	return enc.writeByte(TOKEN_INSERT_ADDRESS)
+	return enc.writeByte(tokenInsertAddress)
 }
 
-func (enc *MMSEncoder) writeString(s string) error {
+// writeString func
+func (enc *Encoder) writeString(s string) error {
 	bytes := []byte(s)
 	bytes = append(bytes, 0)
 	_, err := enc.w.Write(bytes)
 	return err
 }
 
-func (enc *MMSEncoder) writeBytes(b []byte, count int) error {
+// writeBytes func
+func (enc *Encoder) writeBytes(b []byte, count int) error {
 	if n, err := enc.w.Write(b); n != count {
-		return fmt.Errorf("expected to write %d byte[s] but wrote %d", count, n)
+		return fmt.Errorf("expected HeaderTo write %d byte[s] but wrote %d", count, n)
 	} else if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (enc *MMSEncoder) writeByte(b byte) error {
+// writeByte func
+func (enc *Encoder) writeByte(b byte) error {
 	return enc.writeBytes([]byte{b}, 1)
 }
 
-// writeShort encodes i according to the Basic Rules described in section
+// writeShort encodes i according HeaderTo the Basic Rules described in section
 // 8.4.2.2 of WAP-230-WSP-20010705-a.
 //
 // Integers in range 0-127 (< 0x80) shall be encoded as a one octet value
-// with the most significant bit set to one (1xxx xxxx == |0x80) and with
+// with the most significant bit set HeaderTo one (1xxx xxxx == |0x80) and with
 // the value in the remaining least significant bits.
-func (enc *MMSEncoder) writeShortInteger(i uint64) error {
+func (enc *Encoder) writeShortInteger(i uint64) error {
 	return enc.writeByte(byte(i | 0x80))
 }
 
-// writeLongInteger encodes i according to the Basic Rules described in section
+// writeLongInteger encodes i according HeaderTo the Basic Rules described in section
 // 8.4.2.2 of WAP-230-WSP-20010705-a.
 //
 // Long-integer = Short-length Multi-octet-integer
@@ -393,12 +415,12 @@ func (enc *MMSEncoder) writeShortInteger(i uint64) error {
 // Multi-octet-integer = 1*30 OCTET
 // The content octets shall be an unsigned integer value
 // with the most significant octet encoded first (big-endian representation).
-// The minimum number of octets must be used to encode the value.
-func (enc *MMSEncoder) writeLongInteger(i uint64) error {
+// The minimum number of octets must be used HeaderTo encode the value.
+func (enc *Encoder) writeLongInteger(i uint64) error {
 	encodedLong := encodeLong(i)
 	encLength := uint64(len(encodedLong))
-	if encLength > SHORT_LENGTH_MAX {
-		return fmt.Errorf("cannot encode long integer, lenght was %d but expected %d", encLength, SHORT_LENGTH_MAX)
+	if encLength > shortLengthMax {
+		return fmt.Errorf("cannot encode long integer, lenght was %d but expected %d", encLength, shortLengthMax)
 	}
 	if err := enc.writeByte(byte(encLength)); err != nil {
 		return err
@@ -416,33 +438,31 @@ func encodeLong(i uint64) (encodedLong []byte) {
 	return encodedLong
 }
 
-// writeInteger encodes i according to the Basic Rules described in section
+// writeInteger encodes i according HeaderTo the Basic Rules described in section
 // 8.4.2.2 of WAP-230-WSP-20010705-a.
 //
 // It encodes as a Short-integer when i < 128 (=0x80) or as a Long-Integer
 // otherwise
-func (enc *MMSEncoder) writeInteger(i uint64) error {
+func (enc *Encoder) writeInteger(i uint64) error {
 	if i < 0x80 {
 		return enc.writeShortInteger(i)
-	} else {
-		return enc.writeLongInteger(i)
 	}
-	return nil
+	return enc.writeLongInteger(i)
 }
 
-// writeUintVar encodes v according to section 8.1.2 and the Basic Rules
+// writeUintVar encodes v according HeaderTo section 8.1.2 and the Basic Rules
 // described in section 8.4.2.2 of WAP-230-WSP-20010705-a.
 //
 // To encode a large unsigned integer, split it into 7-bit (0x7f) fragments
 // and place them in the payloads of multiple octets. The most significant
 // bits are placed in the first octets with the least significant bits ending
-// up in the last octet. All octets MUST set the Continue bit to 1 (|0x80)
-// except the last octet, which MUST set the Continue bit to 0.
+// up in the last octet. All octets MUST set the Continue bit HeaderTo 1 (|0x80)
+// except the last octet, which MUST set the Continue bit HeaderTo 0.
 //
 // The unsigned integer MUST be encoded in the smallest encoding possible.
 // In other words, the encoded value MUST NOT start with an octet with the
 // value 0x80.
-func (enc *MMSEncoder) writeUintVar(v uint64) error {
+func (enc *Encoder) writeUintVar(v uint64) error {
 	uintVar := []byte{byte(v & 0x7f)}
 	v = v >> 7
 	for v > 0 {

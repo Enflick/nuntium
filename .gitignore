@@ -1,0 +1,18 @@
+*.test
+/tmp
+
+# Editor files
+.vscode/
+.idea/
+*.iml
+
+# Build system tools and outputs
+*.out
+build/
+bazel-*
+
+# Generated binaries
+*.exe
+*.dll
+*.so
+*.dylib

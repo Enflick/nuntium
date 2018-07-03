@@ -17,63 +17,65 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Github https://github.com/ubuntu-phonedations/nuntium/tree/master/mms
  */
 
 package mms
 
-//Table 38 of Well-Known Parameter Assignments from OMA-WAP-MMS section 7.3
+//Table 38 of Well-Known Parameter Assignments HeaderFrom OMA-WAP-MMS section 7.3
 const (
-	WSP_PARAMETER_TYPE_Q                  = 0x00 // Version 1.1 Q-value
-	WSP_PARAMETER_TYPE_CHARSET            = 0x01 // Version 1.1 Well-known-charset
-	WSP_PARAMETER_TYPE_LEVEL              = 0x02 // Version 1.1 Version-value
-	WSP_PARAMETER_TYPE_TYPE               = 0x03 // Version 1.1 Integer-value
-	WSP_PARAMETER_TYPE_NAME_DEFUNCT       = 0x05 // Version 1.1 Text-string
-	WSP_PARAMETER_TYPE_FILENAME_DEFUNCT   = 0x06 // Version 1.1 Text-string
-	WSP_PARAMETER_TYPE_DIFFERENCES        = 0x07 // Version 1.1 Field-name
-	WSP_PARAMETER_TYPE_PADDING            = 0x08 // Version 1.1 Short-integer
-	WSP_PARAMETER_TYPE_CONTENT_TYPE       = 0x09 // Version 1.2 Constrained-encoding
-	WSP_PARAMETER_TYPE_START_DEFUNCT      = 0x0A // Version 1.2 Text-string
-	WSP_PARAMETER_TYPE_START_INFO_DEFUNCT = 0x0B // Version 1.2 Text-string
-	WSP_PARAMETER_TYPE_COMMENT_DEFUNCT    = 0x0C // Version 1.3 Text-string
-	WSP_PARAMETER_TYPE_DOMAIN_DEFUNCT     = 0x0D // Version 1.3 Text-string
-	WSP_PARAMETER_TYPE_MAX_AGE            = 0x0E // Version 1.3 Delta-seconds-value
-	WSP_PARAMETER_TYPE_PATH_DEFUNCT       = 0x0F // Version 1.3 Text-string
-	WSP_PARAMETER_TYPE_SECURE             = 0x10 // Version 1.3 No-value
-	WSP_PARAMETER_TYPE_SEC                = 0x11 // Version 1.4 Short-integer
-	WSP_PARAMETER_TYPE_MAC                = 0x12 // Version 1.4 Text-value
-	WSP_PARAMETER_TYPE_CREATION_DATE      = 0x13 // Version 1.4 Date-value
-	WSP_PARAMETER_TYPE_MODIFICATION_DATE  = 0x14 // Version 1.4 Date-value
-	WSP_PARAMETER_TYPE_READ_DATE          = 0x15 // Version 1.4 Date-value
-	WSP_PARAMETER_TYPE_SIZE               = 0x16 // Version 1.4 Integer-value
-	WSP_PARAMETER_TYPE_NAME               = 0x17 // Version 1.4 Text-value
-	WSP_PARAMETER_TYPE_FILENAME           = 0x18 // Version 1.4 Text-value
-	WSP_PARAMETER_TYPE_START              = 0x19 // Version 1.4 Text-value
-	WSP_PARAMETER_TYPE_START_INFO         = 0x1A // Version 1.4 Text-value
-	WSP_PARAMETER_TYPE_COMMENT            = 0x1B // Version 1.4 Text-value
-	WSP_PARAMETER_TYPE_DOMAIN             = 0x1C // Version 1.4 Text-value
-	WSP_PARAMETER_TYPE_PATH               = 0x1D // Version 1.4 Text-value
-	WSP_PARAMETER_TYPE_UNTYPED            = 0xFF // Version 1.4 Text-value
+	wspParameterTypeQ                = 0x00 // Version 1.1 Q-value
+	wspParameterTypeCharset          = 0x01 // Version 1.1 Well-known-charset
+	wspParameterTypeLevel            = 0x02 // Version 1.1 Version-value
+	wspParameterTypeType             = 0x03 // Version 1.1 Integer-value
+	wspParameterTypeNameDefunct      = 0x05 // Version 1.1 Text-string
+	wspParameterTypeFilenameDefunct  = 0x06 // Version 1.1 Text-string
+	wspParameterTypeDifferences      = 0x07 // Version 1.1 Field-name
+	wspParameterTypePadding          = 0x08 // Version 1.1 Short-integer
+	wspParameterTypeContentType      = 0x09 // Version 1.2 Constrained-encoding
+	wspParameterTypeStartDefunct     = 0x0A // Version 1.2 Text-string
+	wspParameterTypeStartInfoDefunct = 0x0B // Version 1.2 Text-string
+	wspParameterTypeCommentDefunct   = 0x0C // Version 1.3 Text-string
+	wspParameterTypeDomainDefunct    = 0x0D // Version 1.3 Text-string
+	wspParameterTypeMaxAge           = 0x0E // Version 1.3 Delta-seconds-value
+	wspParameterTypePathDefunct      = 0x0F // Version 1.3 Text-string
+	wspParameterTypeSecure           = 0x10 // Version 1.3 No-value
+	wspParameterTypeSec              = 0x11 // Version 1.4 Short-integer
+	wspParameterTypeMac              = 0x12 // Version 1.4 Text-value
+	wspParameterTypeCreationDate     = 0x13 // Version 1.4 Date-value
+	wspParameterTypeModificationDate = 0x14 // Version 1.4 Date-value
+	wspParameterTypeReadDate         = 0x15 // Version 1.4 Date-value
+	wspParameterTypeSize             = 0x16 // Version 1.4 Integer-value
+	wspParameterTypeName             = 0x17 // Version 1.4 Text-value
+	wspParameterTypeFilename         = 0x18 // Version 1.4 Text-value
+	wspParameterTypeStart            = 0x19 // Version 1.4 Text-value
+	wspParameterTypeStartInfo        = 0x1A // Version 1.4 Text-value
+	wspParameterTypeComment          = 0x1B // Version 1.4 Text-value
+	wspParameterTypeDomain           = 0x1C // Version 1.4 Text-value
+	wspParameterTypePath             = 0x1D // Version 1.4 Text-value
+	wspParameterTypeUntyped          = 0xFF // Version 1.4 Text-value
 )
 
 const (
-	MMS_PART_CONTENT_LOCATION = 0x0E
-	MMS_PART_CONTENT_ID       = 0x40
+	mmsPartContentLocation = 0x0E
+	mmsPartContentID       = 0x40
 )
 
 const (
-	TEXT_MAX         = 127
-	TEXT_MIN         = 32
-	SHORT_LENGTH_MAX = 30
-	LENGTH_QUOTE     = 31
-	STRING_QUOTE     = 34
-	SHORT_FILTER     = 0x80
+	textMax        = 127
+	textMin        = 32
+	shortLengthMax = 30
+	lengthQuote    = 31
+	stringQuote    = 34
+	shortFilter    = 0x80
 )
 
 const (
-	ANY_CHARSET = 128
+	anyCharset = 128
 )
 
-var CONTENT_TYPES []string = []string{
+var contentTypes = []string{
 	"*/*", "text/*", "text/html", "text/plain",
 	"text/x-hdml", "text/x-ttml", "text/x-vCalendar",
 	"text/x-vCard", "text/vnd.wap.wml",
@@ -135,7 +137,8 @@ var CONTENT_TYPES []string = []string{
 	"application/vnd.oma.drm.rights+wbxml",
 }
 
-var CHARSETS map[uint64]string = map[uint64]string{
+// CHARSETS maps hex HeaderTo charset standard
+var CHARSETS = map[uint64]string{
 	0x07EA: "big5",
 	0x03E8: "iso-10646-ucs-2",
 	0x04:   "iso-8859-1",

@@ -17,6 +17,8 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Github https://github.com/ubuntu-phonedations/nuntium/tree/master/mms
  */
 
 package mms
@@ -27,24 +29,27 @@ import (
 	"reflect"
 )
 
-func NewDecoder(data []byte) *MMSDecoder {
-	return &MMSDecoder{Data: data}
+// NewDecoder will create a new instance of Decoder
+func NewDecoder(data []byte) *Decoder {
+	return &Decoder{Data: data}
 }
 
-type MMSDecoder struct {
+// Decoder struct
+type Decoder struct {
 	Data   []byte
 	Offset int
 	log    string
 }
 
-func (dec *MMSDecoder) setPduField(pdu *reflect.Value, name string, v interface{},
+// setPduField will set the pdu field
+func (dec *Decoder) setPduField(pdu *reflect.Value, name string, v interface{},
 	setter func(*reflect.Value, interface{})) {
 
 	if name != "" {
 		field := pdu.FieldByName(name)
 		if field.IsValid() {
 			setter(&field, v)
-			dec.log = dec.log + fmt.Sprintf("Setting %s to %s\n", name, v)
+			dec.log = dec.log + fmt.Sprintf("Setting %s HeaderTo %s\n", name, v)
 		} else {
 			log.Println("Field", name, "not in decoding structure")
 		}
@@ -55,15 +60,16 @@ func setterString(field *reflect.Value, v interface{}) { field.SetString(v.(stri
 func setterUint64(field *reflect.Value, v interface{}) { field.SetUint(v.(uint64)) }
 func setterSlice(field *reflect.Value, v interface{})  { field.SetBytes(v.([]byte)) }
 
-func (dec *MMSDecoder) ReadEncodedString(reflectedPdu *reflect.Value, hdr string) (string, error) {
+// ReadEncodedString read encoded string
+func (dec *Decoder) ReadEncodedString(reflectedPdu *reflect.Value, hdr string) (string, error) {
 	var length uint64
 	var err error
 	switch {
-	case dec.Data[dec.Offset+1] < SHORT_LENGTH_MAX:
+	case dec.Data[dec.Offset+1] < shortLengthMax:
 		var l byte
 		l, err = dec.ReadShortInteger(nil, "")
 		length = uint64(l)
-	case dec.Data[dec.Offset+1] == LENGTH_QUOTE:
+	case dec.Data[dec.Offset+1] == lengthQuote:
 		dec.Offset++
 		length, err = dec.ReadUintVar(nil, "")
 	}
@@ -84,7 +90,8 @@ func (dec *MMSDecoder) ReadEncodedString(reflectedPdu *reflect.Value, hdr string
 	return str, nil
 }
 
-func (dec *MMSDecoder) ReadQ(reflectedPdu *reflect.Value) error {
+//ReadQ func
+func (dec *Decoder) ReadQ(reflectedPdu *reflect.Value) error {
 	v, err := dec.ReadUintVar(nil, "")
 	if err != nil {
 		return err
@@ -99,24 +106,24 @@ func (dec *MMSDecoder) ReadQ(reflectedPdu *reflect.Value) error {
 	return nil
 }
 
-// ReadLength reads the length from the next position according to section
+// ReadLength reads the length HeaderFrom the next position according HeaderTo section
 // 8.4.2.2 of WAP-230-WSP-20010705-a.
 //
 // Value-length = Short-length | (Length-quote Length)
-// ; Value length is used to indicate the length of the value to follow
-// Short-length = <Any octet 0-30> (0x7f to check for short)
+// ; Value length is used HeaderTo indicate the length of the value HeaderTo follow
+// Short-length = <Any octet 0-30> (0x7f HeaderTo check for short)
 // Length-quote = <Octet 31>
 // Length = Uintvar-integer
-func (dec *MMSDecoder) ReadLength(reflectedPdu *reflect.Value) (length uint64, err error) {
+func (dec *Decoder) ReadLength(reflectedPdu *reflect.Value) (length uint64, err error) {
 	switch {
-	case dec.Data[dec.Offset+1]&0x7f <= SHORT_LENGTH_MAX:
+	case dec.Data[dec.Offset+1]&0x7f <= shortLengthMax:
 		l, err := dec.ReadShortInteger(nil, "")
 		v := uint64(l)
 		if reflectedPdu != nil {
 			reflectedPdu.FieldByName("Length").SetUint(v)
 		}
 		return v, err
-	case dec.Data[dec.Offset+1] == LENGTH_QUOTE:
+	case dec.Data[dec.Offset+1] == lengthQuote:
 		dec.Offset++
 		var hdr string
 		if reflectedPdu != nil {
@@ -127,10 +134,11 @@ func (dec *MMSDecoder) ReadLength(reflectedPdu *reflect.Value) (length uint64, e
 	return 0, fmt.Errorf("Unhandled length %#x @%d", dec.Data[dec.Offset+1], dec.Offset)
 }
 
-func (dec *MMSDecoder) ReadCharset(reflectedPdu *reflect.Value, hdr string) (string, error) {
+// ReadCharset read charset
+func (dec *Decoder) ReadCharset(reflectedPdu *reflect.Value, hdr string) (string, error) {
 	var charset string
 
-	if dec.Data[dec.Offset] == ANY_CHARSET {
+	if dec.Data[dec.Offset] == anyCharset {
 		dec.Offset++
 		charset = "*"
 	} else {
@@ -149,25 +157,26 @@ func (dec *MMSDecoder) ReadCharset(reflectedPdu *reflect.Value, hdr string) (str
 	return charset, nil
 }
 
-func (dec *MMSDecoder) ReadMediaType(reflectedPdu *reflect.Value, hdr string) (err error) {
+// ReadMediaType read media type
+func (dec *Decoder) ReadMediaType(reflectedPdu *reflect.Value, hdr string) (err error) {
 	var mediaType string
 	var endOffset int
 	origOffset := dec.Offset
 
-	if dec.Data[dec.Offset+1] <= SHORT_LENGTH_MAX || dec.Data[dec.Offset+1] == LENGTH_QUOTE {
-		if length, err := dec.ReadLength(nil); err != nil {
+	if dec.Data[dec.Offset+1] <= shortLengthMax || dec.Data[dec.Offset+1] == lengthQuote {
+		length, err := dec.ReadLength(nil)
+		if err != nil {
 			return err
-		} else {
-			endOffset = int(length) + dec.Offset
 		}
+		endOffset = int(length) + dec.Offset
 	}
 
-	if dec.Data[dec.Offset+1] >= TEXT_MIN && dec.Data[dec.Offset+1] <= TEXT_MAX {
+	if dec.Data[dec.Offset+1] >= textMin && dec.Data[dec.Offset+1] <= textMax {
 		if mediaType, err = dec.ReadString(nil, ""); err != nil {
 			return err
 		}
-	} else if mt, err := dec.ReadInteger(nil, ""); err == nil && len(CONTENT_TYPES) > int(mt) {
-		mediaType = CONTENT_TYPES[mt]
+	} else if mt, err := dec.ReadInteger(nil, ""); err == nil && len(contentTypes) > int(mt) {
+		mediaType = contentTypes[mt]
 	} else {
 		return fmt.Errorf("cannot decode media type for field beginning with %#x@%d", dec.Data[origOffset], origOffset)
 	}
@@ -183,7 +192,8 @@ func (dec *MMSDecoder) ReadMediaType(reflectedPdu *reflect.Value, hdr string) (e
 	return nil
 }
 
-func (dec *MMSDecoder) ReadTo(reflectedPdu *reflect.Value) error {
+// ReadTo func
+func (dec *Decoder) ReadTo(reflectedPdu *reflect.Value) error {
 	// field in the MMS protocol
 	toField, err := dec.ReadEncodedString(reflectedPdu, "")
 	if err != nil {
@@ -196,7 +206,8 @@ func (dec *MMSDecoder) ReadTo(reflectedPdu *reflect.Value) error {
 	return err
 }
 
-func (dec *MMSDecoder) ReadString(reflectedPdu *reflect.Value, hdr string) (string, error) {
+// ReadString func
+func (dec *Decoder) ReadString(reflectedPdu *reflect.Value, hdr string) (string, error) {
 	dec.Offset++
 	if dec.Data[dec.Offset] == 34 { // Skip the quote char(34) == "
 		dec.Offset++
@@ -208,7 +219,7 @@ func (dec *MMSDecoder) ReadString(reflectedPdu *reflect.Value, hdr string) (stri
 		}
 	}
 	if len(dec.Data) == dec.Offset {
-		return "", fmt.Errorf("reached end of data while trying to read string: %s", dec.Data[begin:])
+		return "", fmt.Errorf("reached end of data while trying HeaderTo read string: %s", dec.Data[begin:])
 	}
 	v := string(dec.Data[begin:dec.Offset])
 	dec.setPduField(reflectedPdu, hdr, v, setterString)
@@ -216,7 +227,8 @@ func (dec *MMSDecoder) ReadString(reflectedPdu *reflect.Value, hdr string) (stri
 	return v, nil
 }
 
-func (dec *MMSDecoder) ReadShortInteger(reflectedPdu *reflect.Value, hdr string) (byte, error) {
+// ReadShortInteger func
+func (dec *Decoder) ReadShortInteger(reflectedPdu *reflect.Value, hdr string) (byte, error) {
 	dec.Offset++
 	/*
 		TODO fix use of short when not short
@@ -230,7 +242,8 @@ func (dec *MMSDecoder) ReadShortInteger(reflectedPdu *reflect.Value, hdr string)
 	return v, nil
 }
 
-func (dec *MMSDecoder) ReadByte(reflectedPdu *reflect.Value, hdr string) (byte, error) {
+// ReadByte func
+func (dec *Decoder) ReadByte(reflectedPdu *reflect.Value, hdr string) (byte, error) {
 	dec.Offset++
 	v := dec.Data[dec.Offset]
 	dec.setPduField(reflectedPdu, hdr, uint64(v), setterUint64)
@@ -238,7 +251,8 @@ func (dec *MMSDecoder) ReadByte(reflectedPdu *reflect.Value, hdr string) (byte, 
 	return v, nil
 }
 
-func (dec *MMSDecoder) ReadBoundedBytes(reflectedPdu *reflect.Value, hdr string, end int) ([]byte, error) {
+// ReadBoundedBytes func
+func (dec *Decoder) ReadBoundedBytes(reflectedPdu *reflect.Value, hdr string, end int) ([]byte, error) {
 	v := []byte(dec.Data[dec.Offset:end])
 	dec.setPduField(reflectedPdu, hdr, v, setterSlice)
 	dec.Offset = end - 1
@@ -246,10 +260,10 @@ func (dec *MMSDecoder) ReadBoundedBytes(reflectedPdu *reflect.Value, hdr string,
 	return v, nil
 }
 
-// A UintVar is a variable lenght uint of up to 5 octects long where
+// ReadUintVar is a variable lenght uint of up HeaderTo 5 octects long where
 // more octects available are indicated with the most significant bit
-// set to 1
-func (dec *MMSDecoder) ReadUintVar(reflectedPdu *reflect.Value, hdr string) (value uint64, err error) {
+// set HeaderTo 1
+func (dec *Decoder) ReadUintVar(reflectedPdu *reflect.Value, hdr string) (value uint64, err error) {
 	dec.Offset++
 	for dec.Data[dec.Offset]>>7 == 0x01 {
 		value = value << 7
@@ -264,7 +278,8 @@ func (dec *MMSDecoder) ReadUintVar(reflectedPdu *reflect.Value, hdr string) (val
 	return value, nil
 }
 
-func (dec *MMSDecoder) ReadInteger(reflectedPdu *reflect.Value, hdr string) (uint64, error) {
+// ReadInteger func
+func (dec *Decoder) ReadInteger(reflectedPdu *reflect.Value, hdr string) (uint64, error) {
 	param := dec.Data[dec.Offset+1]
 	var v uint64
 	var err error
@@ -281,11 +296,12 @@ func (dec *MMSDecoder) ReadInteger(reflectedPdu *reflect.Value, hdr string) (uin
 	return v, err
 }
 
-func (dec *MMSDecoder) ReadLongInteger(reflectedPdu *reflect.Value, hdr string) (uint64, error) {
+// ReadLongInteger func
+func (dec *Decoder) ReadLongInteger(reflectedPdu *reflect.Value, hdr string) (uint64, error) {
 	dec.Offset++
 	size := int(dec.Data[dec.Offset])
-	if size > SHORT_LENGTH_MAX {
-		return 0, fmt.Errorf("cannot encode long integer, lenght was %d but expected %d", size, SHORT_LENGTH_MAX)
+	if size > shortLengthMax {
+		return 0, fmt.Errorf("cannot encode long integer, lenght was %d but expected %d", size, shortLengthMax)
 	}
 	dec.Offset++
 	end := dec.Offset + size
@@ -300,32 +316,32 @@ func (dec *MMSDecoder) ReadLongInteger(reflectedPdu *reflect.Value, hdr string) 
 	return v, nil
 }
 
-//getParam reads the next parameter to decode and returns it if it's well known
+//getParam reads the next parameter HeaderTo decode and returns it if it's well known
 //or just decodes and discards if it's application specific, if the latter is
 //the case it also returns false
-func (dec *MMSDecoder) getParam() (byte, bool, error) {
+func (dec *Decoder) getParam() (byte, bool, error) {
 	if dec.Data[dec.Offset]&0x80 != 0 {
 		return dec.Data[dec.Offset] & 0x7f, true, nil
-	} else {
-		var param, value string
-		var err error
-		dec.Offset--
-		//Read the parameter name
-		if param, err = dec.ReadString(nil, ""); err != nil {
-			return 0, false, err
-		}
-		//Read the parameter value
-		if value, err = dec.ReadString(nil, ""); err != nil {
-			return 0, false, err
-		}
-		dec.log = dec.log + fmt.Sprintf("Ignoring application header: %#x: %s", param, value)
-		return 0, false, nil
 	}
+	var param, value string
+	var err error
+	dec.Offset--
+	//Read the parameter name
+	if param, err = dec.ReadString(nil, ""); err != nil {
+		return 0, false, err
+	}
+	//Read the parameter value
+	if value, err = dec.ReadString(nil, ""); err != nil {
+		return 0, false, err
+	}
+	dec.log = dec.log + fmt.Sprintf("Ignoring application header: %#x: %s", param, value)
+	return 0, false, nil
 }
 
-func (dec *MMSDecoder) skipFieldValue() error {
+// skipFieldValue func
+func (dec *Decoder) skipFieldValue() error {
 	switch {
-	case dec.Data[dec.Offset+1] < LENGTH_QUOTE:
+	case dec.Data[dec.Offset+1] < lengthQuote:
 		l, err := dec.ReadByte(nil, "")
 		if err != nil {
 			return err
@@ -336,7 +352,7 @@ func (dec *MMSDecoder) skipFieldValue() error {
 		}
 		dec.Offset += length
 		return nil
-	case dec.Data[dec.Offset+1] == LENGTH_QUOTE:
+	case dec.Data[dec.Offset+1] == lengthQuote:
 		dec.Offset++
 		// TODO These tests should be done in basic read functions
 		if dec.Offset+1 >= len(dec.Data) {
@@ -352,16 +368,17 @@ func (dec *MMSDecoder) skipFieldValue() error {
 		}
 		dec.Offset += length
 		return nil
-	case dec.Data[dec.Offset+1] <= TEXT_MAX:
+	case dec.Data[dec.Offset+1] <= textMax:
 		_, err := dec.ReadString(nil, "")
 		return err
 	}
-	// case dec.Data[dec.Offset + 1] > TEXT_MAX
+	// case dec.Data[dec.Offset + 1] > textMax
 	_, err := dec.ReadShortInteger(nil, "")
 	return err
 }
 
-func (dec *MMSDecoder) Decode(pdu MMSReader) (err error) {
+// Decode func
+func (dec *Decoder) Decode(pdu Reader) (err error) {
 	reflectedPdu := reflect.ValueOf(pdu).Elem()
 	moreHdrToRead := true
 	//fmt.Printf("len data: %d, data: %x\n", len(dec.Data), dec.Data)
@@ -375,7 +392,7 @@ func (dec *MMSDecoder) Decode(pdu MMSReader) (err error) {
 			continue
 		}
 		switch param {
-		case X_MMS_MESSAGE_TYPE:
+		case HeaderXMmsMessageType:
 			dec.Offset++
 			expectedType := byte(reflectedPdu.FieldByName("Type").Uint())
 			parsedType := dec.Data[dec.Offset]
@@ -383,16 +400,16 @@ func (dec *MMSDecoder) Decode(pdu MMSReader) (err error) {
 			if parsedType != expectedType {
 				err = fmt.Errorf("Expected message type %x got %x", expectedType, parsedType)
 			}
-		case FROM:
+		case HeaderFrom:
 			dec.Offset++
 			size := int(dec.Data[dec.Offset])
 			valStart := dec.Offset
 			dec.Offset++
 			token := dec.Data[dec.Offset]
 			switch token {
-			case TOKEN_INSERT_ADDRESS:
+			case tokenInsertAddress:
 				break
-			case TOKEN_ADDRESS_PRESENT:
+			case tokenAddressPresent:
 				// TODO add check for /TYPE=PLMN
 				_, err = dec.ReadEncodedString(&reflectedPdu, "From")
 				if valStart+size != dec.Offset {
@@ -400,9 +417,9 @@ func (dec *MMSDecoder) Decode(pdu MMSReader) (err error) {
 						dec.Offset-valStart, size)
 				}
 			default:
-				err = fmt.Errorf("Unhandled token address in from field %x", token)
+				err = fmt.Errorf("Unhandled token address in HeaderFrom field %x", token)
 			}
-		case X_MMS_EXPIRY:
+		case HeaderXMmsExpiry:
 			dec.Offset++
 			size := int(dec.Data[dec.Offset])
 			dec.Offset++
@@ -417,9 +434,9 @@ func (dec *MMSDecoder) Decode(pdu MMSReader) (err error) {
 			dec.log = dec.log + fmt.Sprintf("Expiry token: %x\n", token)
 			reflectedPdu.FieldByName("Expiry").SetUint(uint64(val))
 			dec.log = dec.log + fmt.Sprintf("Message Expiry %d, %x\n", val, dec.Data[dec.Offset])
-		case X_MMS_TRANSACTION_ID:
-			_, err = dec.ReadString(&reflectedPdu, "TransactionId")
-		case CONTENT_TYPE:
+		case HeaderXMmsTransactionID:
+			_, err = dec.ReadString(&reflectedPdu, "TransactionID")
+		case HeaderContentType:
 			ctMember := reflectedPdu.FieldByName("Content")
 			if err = dec.ReadAttachment(&ctMember); err != nil {
 				return err
@@ -432,50 +449,50 @@ func (dec *MMSDecoder) Decode(pdu MMSReader) (err error) {
 				_, err = dec.ReadBoundedBytes(&reflectedPdu, "Data", len(dec.Data))
 			}
 			moreHdrToRead = false
-		case X_MMS_CONTENT_LOCATION:
+		case HeaderXMmsContentLocation:
 			_, err = dec.ReadString(&reflectedPdu, "ContentLocation")
 			moreHdrToRead = false
-		case MESSAGE_ID:
+		case HeaderMessageID:
 			_, err = dec.ReadString(&reflectedPdu, "MessageId")
-		case SUBJECT:
+		case HeaderSubject:
 			_, err = dec.ReadEncodedString(&reflectedPdu, "Subject")
-		case TO:
+		case HeaderTo:
 			err = dec.ReadTo(&reflectedPdu)
-		case CC:
+		case HeaderCC:
 			_, err = dec.ReadEncodedString(&reflectedPdu, "Cc")
-		case X_MMS_REPLY_CHARGING_ID:
+		case HeaderXMmsReplyChargingID:
 			_, err = dec.ReadString(&reflectedPdu, "ReplyChargingId")
-		case X_MMS_RETRIEVE_TEXT:
+		case HeaderXMmsRetrieveText:
 			_, err = dec.ReadString(&reflectedPdu, "RetrieveText")
-		case X_MMS_MMS_VERSION:
+		case HeaderXMmsMmsVersion:
 			// TODO This should be ReadShortInteger instead, but we read it
 			// as a byte because we are not properly encoding the version
 			// either, as we are using the raw value there. To fix this we
-			// need to change the encoder and the MMS_MESSAGE_VERSION_1_X
+			// need HeaderTo change the encoder and the MMS_MESSAGE_VERSION_1_X
 			// constants.
 			_, err = dec.ReadByte(&reflectedPdu, "Version")
-		case X_MMS_MESSAGE_CLASS:
+		case HeaderXMmsMessageClass:
 			//TODO implement Token text form
 			_, err = dec.ReadByte(&reflectedPdu, "Class")
-		case X_MMS_REPLY_CHARGING:
+		case HeaderXMmsReplyCharging:
 			_, err = dec.ReadByte(&reflectedPdu, "ReplyCharging")
-		case X_MMS_REPLY_CHARGING_DEADLINE:
+		case HeaderXMmsReplyChargingDeadline:
 			_, err = dec.ReadByte(&reflectedPdu, "ReplyChargingDeadLine")
-		case X_MMS_PRIORITY:
+		case HeaderxMmsPriority:
 			_, err = dec.ReadByte(&reflectedPdu, "Priority")
-		case X_MMS_RETRIEVE_STATUS:
+		case HeaderXMmsRetrieveStatus:
 			_, err = dec.ReadByte(&reflectedPdu, "RetrieveStatus")
-		case X_MMS_RESPONSE_STATUS:
+		case HeaderXMmsResponseStatus:
 			_, err = dec.ReadByte(&reflectedPdu, "ResponseStatus")
-		case X_MMS_RESPONSE_TEXT:
+		case HeaderXMmsResponseText:
 			_, err = dec.ReadString(&reflectedPdu, "ResponseText")
-		case X_MMS_DELIVERY_REPORT:
+		case HeaderXMmsDeliveryReport:
 			_, err = dec.ReadByte(&reflectedPdu, "DeliveryReport")
-		case X_MMS_READ_REPORT:
+		case HeaderXMmsReadReport:
 			_, err = dec.ReadByte(&reflectedPdu, "ReadReport")
-		case X_MMS_MESSAGE_SIZE:
+		case HeaderXMmsMessageSize:
 			_, err = dec.ReadLongInteger(&reflectedPdu, "Size")
-		case DATE:
+		case HeaderDate:
 			_, err = dec.ReadLongInteger(&reflectedPdu, "Date")
 		default:
 			log.Printf("Skipping unrecognized header 0x%02x", param)
@@ -488,6 +505,7 @@ func (dec *MMSDecoder) Decode(pdu MMSReader) (err error) {
 	return nil
 }
 
-func (dec *MMSDecoder) GetLog() string {
+// GetLog func
+func (dec *Decoder) GetLog() string {
 	return dec.log
 }

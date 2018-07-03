@@ -17,6 +17,8 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Github https://github.com/ubuntu-phonedations/nuntium/tree/master/mms
  */
 
 package mms
@@ -30,6 +32,7 @@ import (
 	"strings"
 )
 
+// Attachment is a struct to maintain all OMA keys for an attachment
 type Attachment struct {
 	MediaType        string
 	Type             string `encode:"no"`
@@ -42,7 +45,7 @@ type Attachment struct {
 	Path             string `encode:"no"`
 	Comment          string `encode:"no"`
 	ContentLocation  string
-	ContentId        string
+	ContentID        string
 	Level            byte    `encode:"no"`
 	Length           uint64  `encode:"no"`
 	Size             uint64  `encode:"no"`
@@ -55,6 +58,7 @@ type Attachment struct {
 	Data             []byte  `encode:"no"`
 }
 
+// NewAttachment loads media from a file and packages it into an attachment struct
 func NewAttachment(id, contentType, filePath string) (*Attachment, error) {
 	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
@@ -62,7 +66,7 @@ func NewAttachment(id, contentType, filePath string) (*Attachment, error) {
 	}
 
 	ct := &Attachment{
-		ContentId:       id,
+		ContentID:       id,
 		ContentLocation: id,
 		Name:            id,
 		Data:            data,
@@ -86,7 +90,39 @@ func NewAttachment(id, contentType, filePath string) (*Attachment, error) {
 		if err != nil {
 			return nil, err
 		}
-		ct.ContentId = start
+		ct.ContentID = start
+	}
+	return ct, nil
+}
+
+// NewAttachmentFromBuffer get an attachment struct HeaderFrom buffer
+func NewAttachmentFromBuffer(id string, contentType string, buffer []byte) (*Attachment, error) {
+	ct := &Attachment{
+		ContentID:       id,
+		ContentLocation: id,
+		Name:            id,
+		Data:            buffer,
+	}
+
+	parts := strings.Split(contentType, ";")
+	ct.MediaType = strings.TrimSpace(parts[0])
+	for i := 1; i < len(parts); i++ {
+		if field := strings.Split(strings.TrimSpace(parts[i]), "="); len(field) > 1 {
+			switch strings.TrimSpace(field[0]) {
+			case "charset":
+				ct.Charset = strings.TrimSpace(field[1])
+			default:
+				log.Println("Unhandled field in attachment", field[0])
+			}
+		}
+	}
+
+	if contentType == "application/smil" {
+		start, err := getSmilStart(buffer)
+		if err != nil {
+			return nil, err
+		}
+		ct.ContentID = start
 	}
 	return ct, nil
 }
@@ -125,7 +161,8 @@ func (pdu *MRetrieveConf) GetDataParts() []Attachment {
 	return dataParts
 }
 
-func (dec *MMSDecoder) ReadAttachmentParts(reflectedPdu *reflect.Value) error {
+// ReadAttachmentParts reads attachments from parts
+func (dec *Decoder) ReadAttachmentParts(reflectedPdu *reflect.Value) error {
 	var err error
 	var parts uint64
 	if parts, err = dec.ReadUintVar(nil, ""); err != nil {
@@ -172,15 +209,16 @@ func (dec *MMSDecoder) ReadAttachmentParts(reflectedPdu *reflect.Value) error {
 	return nil
 }
 
-func (dec *MMSDecoder) ReadMMSHeaders(ctMember *reflect.Value, headerEnd int) error {
+// ReadMMSHeaders read the headers from an MMS package
+func (dec *Decoder) ReadMMSHeaders(ctMember *reflect.Value, headerEnd int) error {
 	for dec.Offset < headerEnd {
 		var err error
 		param, _ := dec.ReadInteger(nil, "")
 		switch param {
-		case MMS_PART_CONTENT_LOCATION:
+		case mmsPartContentLocation:
 			_, err = dec.ReadString(ctMember, "ContentLocation")
-		case MMS_PART_CONTENT_ID:
-			_, err = dec.ReadString(ctMember, "ContentId")
+		case mmsPartContentID:
+			_, err = dec.ReadString(ctMember, "ContentID")
 		default:
 			break
 		}
@@ -191,14 +229,15 @@ func (dec *MMSDecoder) ReadMMSHeaders(ctMember *reflect.Value, headerEnd int) er
 	return nil
 }
 
-func (dec *MMSDecoder) ReadAttachment(ctMember *reflect.Value) error {
+// ReadAttachment read attachment
+func (dec *Decoder) ReadAttachment(ctMember *reflect.Value) error {
 	if dec.Offset+1 >= len(dec.Data) {
 		return fmt.Errorf("message ended prematurely, offset: %d and payload length is %d", dec.Offset, len(dec.Data))
 	}
 	// These call the same function
-	if next := dec.Data[dec.Offset+1]; next&SHORT_FILTER != 0 {
+	if next := dec.Data[dec.Offset+1]; next&shortFilter != 0 {
 		return dec.ReadMediaType(ctMember, "MediaType")
-	} else if next >= TEXT_MIN && next <= TEXT_MAX {
+	} else if next >= textMin && next <= textMax {
 		return dec.ReadMediaType(ctMember, "MediaType")
 	}
 
@@ -217,75 +256,75 @@ func (dec *MMSDecoder) ReadAttachment(ctMember *reflect.Value) error {
 	for dec.Offset < len(dec.Data) && dec.Offset < endOffset {
 		param, _ := dec.ReadInteger(nil, "")
 		switch param {
-		case WSP_PARAMETER_TYPE_Q:
+		case wspParameterTypeQ:
 			err = dec.ReadQ(ctMember)
-		case WSP_PARAMETER_TYPE_CHARSET:
+		case wspParameterTypeCharset:
 			_, err = dec.ReadCharset(ctMember, "Charset")
-		case WSP_PARAMETER_TYPE_LEVEL:
+		case wspParameterTypeLevel:
 			_, err = dec.ReadShortInteger(ctMember, "Level")
-		case WSP_PARAMETER_TYPE_TYPE:
+		case wspParameterTypeType:
 			_, err = dec.ReadInteger(ctMember, "Type")
-		case WSP_PARAMETER_TYPE_NAME_DEFUNCT:
+		case wspParameterTypeNameDefunct:
 			log.Println("Using deprecated Name header")
 			_, err = dec.ReadString(ctMember, "Name")
-		case WSP_PARAMETER_TYPE_FILENAME_DEFUNCT:
+		case wspParameterTypeFilenameDefunct:
 			log.Println("Using deprecated FileName header")
 			_, err = dec.ReadString(ctMember, "FileName")
-		case WSP_PARAMETER_TYPE_DIFFERENCES:
+		case wspParameterTypeDifferences:
 			err = errors.New("Unhandled Differences")
-		case WSP_PARAMETER_TYPE_PADDING:
+		case wspParameterTypePadding:
 			dec.ReadShortInteger(nil, "")
-		case WSP_PARAMETER_TYPE_CONTENT_TYPE:
+		case wspParameterTypeContentType:
 			_, err = dec.ReadString(ctMember, "Type")
-		case WSP_PARAMETER_TYPE_START_DEFUNCT:
+		case wspParameterTypeStartDefunct:
 			log.Println("Using deprecated Start header")
 			_, err = dec.ReadString(ctMember, "Start")
-		case WSP_PARAMETER_TYPE_START_INFO_DEFUNCT:
+		case wspParameterTypeStartInfoDefunct:
 			log.Println("Using deprecated StartInfo header")
 			_, err = dec.ReadString(ctMember, "StartInfo")
-		case WSP_PARAMETER_TYPE_COMMENT_DEFUNCT:
+		case wspParameterTypeCommentDefunct:
 			log.Println("Using deprecated Comment header")
 			_, err = dec.ReadString(ctMember, "Comment")
-		case WSP_PARAMETER_TYPE_DOMAIN_DEFUNCT:
+		case wspParameterTypeDomainDefunct:
 			log.Println("Using deprecated Domain header")
 			_, err = dec.ReadString(ctMember, "Domain")
-		case WSP_PARAMETER_TYPE_MAX_AGE:
+		case wspParameterTypeMaxAge:
 			err = errors.New("Unhandled Max Age")
-		case WSP_PARAMETER_TYPE_PATH_DEFUNCT:
+		case wspParameterTypePathDefunct:
 			log.Println("Using deprecated Path header")
 			_, err = dec.ReadString(ctMember, "Path")
-		case WSP_PARAMETER_TYPE_SECURE:
+		case wspParameterTypeSecure:
 			log.Println("Unhandled Secure header detected")
-		case WSP_PARAMETER_TYPE_SEC:
+		case wspParameterTypeSec:
 			v, _ := dec.ReadShortInteger(nil, "")
 			log.Println("Using deprecated and unhandled Sec header with value", v)
-		case WSP_PARAMETER_TYPE_MAC:
+		case wspParameterTypeMac:
 			err = errors.New("Unhandled MAC")
-		case WSP_PARAMETER_TYPE_CREATION_DATE:
-		case WSP_PARAMETER_TYPE_MODIFICATION_DATE:
-		case WSP_PARAMETER_TYPE_READ_DATE:
+		case wspParameterTypeCreationDate:
+		case wspParameterTypeModificationDate:
+		case wspParameterTypeReadDate:
 			err = errors.New("Unhandled Date parameters")
-		case WSP_PARAMETER_TYPE_SIZE:
+		case wspParameterTypeSize:
 			_, err = dec.ReadInteger(ctMember, "Size")
-		case WSP_PARAMETER_TYPE_NAME:
+		case wspParameterTypeName:
 			_, err = dec.ReadString(ctMember, "Name")
-		case WSP_PARAMETER_TYPE_FILENAME:
+		case wspParameterTypeFilename:
 			_, err = dec.ReadString(ctMember, "FileName")
-		case WSP_PARAMETER_TYPE_START:
+		case wspParameterTypeStart:
 			_, err = dec.ReadString(ctMember, "Start")
-		case WSP_PARAMETER_TYPE_START_INFO:
+		case wspParameterTypeStartInfo:
 			_, err = dec.ReadString(ctMember, "StartInfo")
-		case WSP_PARAMETER_TYPE_COMMENT:
+		case wspParameterTypeComment:
 			_, err = dec.ReadString(ctMember, "Comment")
-		case WSP_PARAMETER_TYPE_DOMAIN:
+		case wspParameterTypeDomain:
 			_, err = dec.ReadString(ctMember, "Domain")
-		case WSP_PARAMETER_TYPE_PATH:
+		case wspParameterTypePath:
 			_, err = dec.ReadString(ctMember, "Path")
-		case WSP_PARAMETER_TYPE_UNTYPED:
+		case wspParameterTypeUntyped:
 			v, _ := dec.ReadString(nil, "")
 			log.Println("Unhandled Secure header detected with value", v)
 		default:
-			err = fmt.Errorf("Unhandled parameter %#x == %d at offset %d", param, param, dec.Offset)
+			err = fmt.Errorf("unhandled parameter %#x == %d at offset %d", param, param, dec.Offset)
 		}
 		if err != nil {
 			return err
