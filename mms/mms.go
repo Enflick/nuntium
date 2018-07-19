@@ -86,10 +86,10 @@ const (
 )
 
 const (
-	mmsMessageVersion1_0 = 0x90
-	mmsMessageVersion1_1 = 0x91
-	mmsMessageVersion1_2 = 0x92
-	mmsMessageVersion1_3 = 0x93
+	MMSMessageVersion1_0 = 0x90
+	MMSMessageVersion1_1 = 0x91
+	MMSMessageVersion1_2 = 0x92
+	MMSMessageVersion1_3 = 0x93
 )
 
 // Delivery Report defined in OMA-WAP-MMS section 7.2.6
@@ -282,7 +282,7 @@ func NewMSendReq(recipients []string, attachments []*Attachment, deliveryReport 
 		Type:          typeSendReq,
 		To:            recipients,
 		TransactionID: uuid,
-		Version:       mmsMessageVersion1_1,
+		Version:       MMSMessageVersion1_1,
 		UUID:          uuid,
 		Date:          getDate(),
 		// this will expire the message in 7 days
