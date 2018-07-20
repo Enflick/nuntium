@@ -73,8 +73,12 @@ func (enc *Encoder) Encode(pdu Writer) error {
 			err = enc.writeByteParam(HeaderXMmsMessageType, byte(f.Uint()))
 		case "Version":
 			err = enc.writeByteParam(HeaderXMmsMmsVersion, byte(f.Uint()))
+		case "ResponseStatus":
+			err = enc.writeByteParam(HeaderXMmsMmsVersion, byte(f.Uint()))
 		case "TransactionID":
 			err = enc.writeStringParam(HeaderXMmsTransactionID, f.String())
+		case "MessageID":
+			err = enc.writeStringParam(HeaderMessageID, f.String())
 		case "Status":
 			err = enc.writeByteParam(HeaderXMmsStatus, byte(f.Uint()))
 		case "From":

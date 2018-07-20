@@ -215,7 +215,7 @@ type MSendConf struct {
 	TransactionID  string
 	Version        byte
 	ResponseStatus byte
-	ResponseText   string
+	ResponseText   string `encode:"optional"`
 	MessageID      string
 }
 
